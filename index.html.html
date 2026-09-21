@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#060b17">
+<title>Gate Time Tracker — متتبع الحضور والانصراف</title>
+<style>
+:root{
+  --bg:#060b17; --bg-2:#0a1226;
+  --card-a:#131f3d; --card-b:#0b1530;
+  --border:#22304f; --border-hi:#34487a;
+  --text:#eaf0fc; --muted:#8495b6; --faint:#5b6c8f;
+  --green:#22c98a; --green-d:#0f9f6a;
+  --blue:#3b82f6; --blue-d:#2563eb;
+  --amber:#f5a524; --orange:#fb8c3c; --red:#ef4444;
+  --cyan:#22e5ff; --violet:#a78bfa; --teal:#2dd4bf;
+  --font:"Segoe UI Variable Text","Segoe UI",Tahoma,"Noto Sans Arabic","Noto Naskh Arabic",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --r:20px;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  margin:0;min-height:100vh;color:var(--text);font-family:var(--font);font-size:16px;line-height:1.55;
+  background:
+    radial-gradient(1100px 560px at 85% -8%,rgba(59,130,246,.16),transparent 62%),
+    radial-gradient(800px 500px at 0% 0%,rgba(34,201,138,.08),transparent 60%),
+    radial-gradient(900px 600px at 50% 120%,rgba(34,229,255,.06),transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+  padding:calc(18px + var(--safe-t)) 16px calc(40px + var(--safe-b));
+}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3,p{margin:0}
+.num,.digits{font-variant-numeric:tabular-nums;unicode-bidi:isolate}
+.shell{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.skip{position:absolute;inset-inline-start:-999px;top:8px;background:var(--cyan);color:#001;padding:8px 14px;border-radius:8px;z-index:50}
+.skip:focus{inset-inline-start:12px}
+:focus-visible{outline:3px solid var(--cyan);outline-offset:2px;border-radius:8px}
+
+/* ---------- cards ---------- */
+.card{
+  position:relative;border-radius:var(--r);padding:20px;
+  background:linear-gradient(160deg,var(--card-a) 0%,var(--card-b) 65%);
+  border:1px solid var(--border);
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 24px 44px -28px rgba(0,0,0,.9);
+  transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease;
+  animation:rise .7s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(var(--i,0)*80ms);
+}
+.card:hover{transform:translateY(-2px);border-color:var(--border-hi);box-shadow:0 1px 0 rgba(255,255,255,.07) inset,0 30px 50px -26px rgba(0,0,0,.95)}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.card h2{font-size:.95rem;font-weight:600;color:var(--muted);margin-bottom:12px}
+
+/* ---------- header ---------- */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 20px}
+.brand{display:flex;align-items:center;gap:14px}
+.mark{width:46px;height:46px;flex:none;padding:9px;border-radius:14px;background:linear-gradient(145deg,#1b3a78,#0f2350);border:1px solid var(--border-hi);stroke:var(--cyan);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.brand h1{font-size:1.25rem;font-weight:700;letter-spacing:.01em;direction:ltr;text-align:right}
+.brand p{color:var(--muted);font-size:.85rem}
+.clock{text-align:start;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
+.clock-time{font-size:2.1rem;font-weight:600;line-height:1;letter-spacing:.02em;display:inline-flex;align-items:baseline}
+.clock-time small{font-size:1.1rem;color:var(--muted);font-weight:500}
+.clock-suf{color:var(--muted);font-weight:600}
+.clock-date{flex-basis:100%;color:var(--muted);font-size:.85rem}
+
+/* ---------- banners ---------- */
+.banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 18px;border-radius:16px;border:1px solid;font-size:.95rem}
+.banner p{color:inherit;opacity:.85;font-size:.88rem;margin-top:2px}
+.banner.amber{background:rgba(245,165,36,.09);border-color:rgba(245,165,36,.45);color:#ffd48a}
+.banner.red{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.5);color:#ffb4b4}
+.stack{display:flex;flex-direction:column;gap:10px}
+.alertbox{
+  display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  border-radius:16px;padding:16px 20px;border:1px solid var(--lv);
+  background:color-mix(in srgb,var(--lv) 12%,#0a1226);
+  transition:background .4s,border-color .4s;
+  border-inline-start-width:6px;
+}
+.alertbox[data-level=warn]{--lv:var(--amber);animation:glowAmber 2.4s ease-in-out infinite}
+.alertbox[data-level=reached]{--lv:var(--orange);animation:glowAmber 1.6s ease-in-out infinite}
+.alertbox[data-level=exceeded]{--lv:var(--red);animation:glowRed 1.1s ease-in-out infinite}
+.alertbox strong{display:block;font-size:1.05rem;color:color-mix(in srgb,var(--lv) 55%,#fff)}
+.alertbox .extra{color:var(--text);opacity:.85;font-size:.9rem;font-variant-numeric:tabular-nums}
+@keyframes glowAmber{0%,100%{box-shadow:0 0 0 0 rgba(245,165,36,0)}50%{box-shadow:0 0 0 6px rgba(245,165,36,.18)}}
+@keyframes glowRed{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}50%{box-shadow:0 0 0 8px rgba(239,68,68,.28)}}
+.alertbox.pop{animation:pop .5s ease,glowRed 1.1s ease-in-out .5s infinite}
+@keyframes pop{0%{transform:scale(.97)}60%{transform:scale(1.015)}100%{transform:none}}
+
+/* ---------- grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.c5{grid-column:span 5}.c7{grid-column:span 7}.c12{grid-column:1/-1}
+@media(max-width:900px){.c5,.c7{grid-column:1/-1}}
+
+/* ---------- actions ---------- */
+.pill{display:inline-flex;align-items:center;gap:10px;padding:8px 18px;border-radius:999px;font-weight:700;font-size:1.1rem;border:1px solid var(--pc);color:var(--pc);background:color-mix(in srgb,var(--pc) 13%,transparent);transition:color .35s,background .35s,border-color .35s}
+.pill[data-s=none]{--pc:var(--muted)}
+.pill[data-s=inside]{--pc:var(--green)}
+.pill[data-s=outside]{--pc:var(--blue)}
+.pill[data-s=ended]{--pc:var(--violet)}
+.pill[data-s=incomplete]{--pc:var(--amber)}
+.pill .dot{width:11px;height:11px;border-radius:50%;background:var(--pc);box-shadow:0 0 0 0 var(--pc);transition:background .35s}
+.pill[data-s=inside] .dot{animation:ping 2.4s infinite}
+.pill[data-s=outside] .dot{animation:ping 1.2s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--pc) 60%,transparent)}80%,100%{box-shadow:0 0 0 10px transparent}}
+#statusText.flip{animation:flip .45s ease}
+@keyframes flip{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.sub{color:var(--muted);font-size:.9rem;margin:10px 0 16px;min-height:1.4em;font-variant-numeric:tabular-nums}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  min-height:56px;padding:12px 18px;border-radius:16px;border:1px solid var(--border-hi);cursor:pointer;
+  background:linear-gradient(180deg,#182648,#101b38);font-weight:700;font-size:1.02rem;
+  transition:transform .15s ease,filter .2s,box-shadow .25s,opacity .2s;
+}
+.btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.12)}
+.btn:active:not(:disabled){transform:scale(.96)}
+.btn:disabled{opacity:.35;cursor:not-allowed;filter:saturate(.4)}
+.btn svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn .en{display:block;font-size:.72rem;font-weight:500;opacity:.8;direction:ltr;letter-spacing:.03em}
+.btn .lbl{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+.btn.big{min-height:76px;font-size:1.15rem}
+.btn.start{grid-column:1/-1;background:linear-gradient(180deg,#1fce8f,#0e9a67);border-color:#39e0a5;color:#03251a;box-shadow:0 12px 26px -14px rgba(34,201,138,.8)}
+.btn.out{background:linear-gradient(180deg,#4a90ff,#2a62d9);border-color:#7db0ff;color:#fff;box-shadow:0 12px 26px -14px rgba(59,130,246,.85)}
+.btn.in{background:linear-gradient(180deg,#25c89a,#0e8f78);border-color:#5eead4;color:#02241d;box-shadow:0 12px 26px -14px rgba(45,212,191,.7)}
+.btn.end{grid-column:1/-1;background:transparent;border-color:rgba(167,139,250,.55);color:#cdbfff}
+.btn.sm{min-height:40px;padding:8px 16px;font-size:.9rem;border-radius:12px}
+.btn.danger{background:linear-gradient(180deg,#e04848,#b42323);border-color:#f58a8a;color:#fff}
+.btn.ghost{background:transparent}
+.link{background:none;border:0;padding:6px 4px;color:var(--cyan);cursor:pointer;font-size:.88rem;text-decoration:underline;text-underline-offset:3px}
+.link.danger{color:#ff8a8a}
+.link:hover{filter:brightness(1.2)}
+#btnUndoEnd{margin-top:10px}
+
+/* ---------- leave card ---------- */
+.leave{display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.leave::after{content:"";position:absolute;inset-inline-end:-80px;top:-80px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(34,229,255,.14),transparent 65%);pointer-events:none}
+.leave-time{display:flex;align-items:baseline;gap:10px;color:var(--cyan);text-shadow:0 0 44px rgba(34,229,255,.35)}
+.leave-time .hm{font-size:clamp(3.4rem,10vw,5.8rem);font-weight:600;line-height:1;letter-spacing:-.02em;direction:ltr}
+.leave-time .ss{font-size:1.6rem;font-weight:500;opacity:.75;direction:ltr}
+.leave-time .suf{font-size:1.5rem;font-weight:600}
+.leave-time.dim{color:var(--faint);text-shadow:none}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:.82rem;font-weight:600;border:1px solid color-mix(in srgb,var(--cc,var(--muted)) 55%,transparent);color:var(--cc,var(--muted));background:color-mix(in srgb,var(--cc,var(--muted)) 12%,transparent);white-space:nowrap}
+.chip.green{--cc:var(--green)}.chip.blue{--cc:var(--blue)}.chip.amber{--cc:var(--amber)}.chip.red{--cc:var(--red)}.chip.cyan{--cc:var(--cyan)}.chip.violet{--cc:var(--violet)}.chip.teal{--cc:var(--teal)}
+.leave-line{color:var(--muted);font-size:.92rem;font-variant-numeric:tabular-nums}
+.leave-result{margin-top:8px;padding:12px 14px;border-radius:14px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.4);font-size:.95rem}
+.leave-result.late{background:rgba(245,165,36,.1);border-color:rgba(245,165,36,.45)}
+
+/* ---------- allowance ---------- */
+.alloc{--lv:var(--green)}
+.alloc[data-level=warn]{--lv:var(--amber)}
+.alloc[data-level=reached]{--lv:var(--orange)}
+.alloc[data-level=exceeded]{--lv:var(--red)}
+.alloc{transition:border-color .4s}
+.alloc[data-level=warn],.alloc[data-level=reached],.alloc[data-level=exceeded]{border-color:color-mix(in srgb,var(--lv) 60%,var(--border))}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+.metric .k{color:var(--muted);font-size:.82rem}
+.metric .v{font-size:clamp(1.5rem,4.2vw,2.15rem);font-weight:600;line-height:1.2;font-variant-numeric:tabular-nums;direction:ltr;text-align:right;transition:color .35s}
+.metric.main .v{color:color-mix(in srgb,var(--lv) 70%,#fff)}
+.metric.ex .v{color:var(--muted)}
+.alloc[data-level=exceeded] .metric.ex .v{color:var(--red)}
+.track{position:relative;height:20px;border-radius:999px;background:#0a1329;border:1px solid var(--border);overflow:hidden}
+.fill{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--lv) 70%,#000),var(--lv));transition:width .9s cubic-bezier(.3,.7,.2,1),background .4s;box-shadow:0 0 18px color-mix(in srgb,var(--lv) 55%,transparent)}
+.alloc[data-level=warn] .fill,.alloc[data-level=reached] .fill{animation:breathe 1.8s ease-in-out infinite}
+.alloc[data-level=exceeded] .fill{animation:breathe .9s ease-in-out infinite}
+@keyframes breathe{50%{filter:brightness(1.35)}}
+.tick{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.55);inset-inline-start:80%}
+.scale{display:flex;justify-content:space-between;color:var(--faint);font-size:.78rem;margin-top:6px;font-variant-numeric:tabular-nums}
+.pcts{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;color:var(--muted);font-size:.9rem}
+.pcts strong{color:var(--text);font-size:1.15rem;font-variant-numeric:tabular-nums}
+
+/* ---------- details ---------- */
+.dl{display:grid;gap:0;margin:0}
+.dl div{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid rgba(34,48,79,.7)}
+.dl div:last-child{border-bottom:0}
+.dl dt{color:var(--muted);font-size:.9rem}
+.dl dd{margin:0;font-weight:600;text-align:end;font-variant-numeric:tabular-nums}
+.dl dd.good{color:var(--green)}.dl dd.bad{color:var(--amber)}.dl dd.cy{color:var(--cyan)}
+
+/* ---------- tabs ---------- */
+.tabs-card{padding:0}
+.tabs{display:flex;gap:4px;padding:10px 12px 0;border-bottom:1px solid var(--border);overflow-x:auto}
+.tab{background:none;border:0;padding:12px 20px;cursor:pointer;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;border-radius:10px 10px 0 0;white-space:nowrap;transition:color .2s,border-color .2s,background .2s}
+.tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.tab[aria-selected=true]{color:var(--text);border-bottom-color:var(--cyan)}
+.panel{padding:20px;animation:flip .4s ease}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.toolbar .grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+select,input[type=time],input[type=number],input[type=datetime-local]{
+  background:#0a1329;border:1px solid var(--border-hi);border-radius:12px;padding:10px 12px;min-height:44px;color:var(--text);color-scheme:dark;
+}
+.seg{display:inline-flex;border:1px solid var(--border-hi);border-radius:12px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:10px 18px;cursor:pointer;color:var(--muted);font-weight:600;transition:background .2s,color .2s}
+.seg button[aria-pressed=true]{background:rgba(34,229,255,.14);color:var(--cyan)}
+.nav{display:inline-flex;align-items:center;gap:6px}
+.nav button{width:44px;height:44px;border-radius:12px;border:1px solid var(--border-hi);background:#0f1a36;cursor:pointer;font-size:1.1rem;transition:transform .15s,opacity .2s}
+.nav button:active:not(:disabled){transform:scale(.92)}
+.nav button:disabled{opacity:.3;cursor:not-allowed}
+.nav .lab{min-width:190px;text-align:center;font-weight:600}
+.tw{overflow-x:auto;border:1px solid var(--border);border-radius:14px}
+table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:720px}
+th{background:#0e1932;color:var(--muted);font-weight:600;text-align:start;padding:11px 12px;white-space:nowrap;position:sticky;top:0}
+td{padding:10px 12px;border-top:1px solid rgba(34,48,79,.75);white-space:nowrap;font-variant-numeric:tabular-nums}
+tbody tr:hover td{background:rgba(255,255,255,.025)}
+tr.grp td{background:#0d1730;padding:10px 12px;border-top:2px solid var(--border-hi)}
+.grpin{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.grpin .sp{flex:1}
+tfoot td{background:#0d1730;font-weight:700;border-top:2px solid var(--border-hi)}
+.ev{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.ev::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--ec)}
+.ev.start{--ec:var(--green)}.ev.out{--ec:var(--blue)}.ev.in{--ec:var(--teal)}.ev.end{--ec:var(--violet)}
+.muted{color:var(--muted)}
+.empty{text-align:center;padding:38px 16px;color:var(--muted)}
+.empty svg{width:64px;height:64px;stroke:var(--faint);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:10px}
+.empty strong{display:block;color:var(--text);font-size:1.05rem;margin-bottom:4px}
+.empty .btn{margin-top:14px}
+
+/* ---------- reports ---------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.tile{padding:14px 16px;border-radius:14px;background:#0d1730;border:1px solid var(--border)}
+.tile .k{color:var(--muted);font-size:.82rem}
+.tile .v{font-size:1.4rem;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.tile.warn .v{color:var(--amber)}.tile.bad .v{color:var(--red)}.tile.good .v{color:var(--green)}
+.chartbox{margin-bottom:18px;padding:16px;border-radius:14px;background:#0d1730;border:1px solid var(--border)}
+.chartbox h3{font-size:.9rem;color:var(--muted);font-weight:600;margin-bottom:12px}
+.plot{position:relative;height:150px;border-bottom:1px solid var(--border-hi)}
+.bars,.blabels{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:clamp(3px,1vw,10px)}
+.bars{height:100%;align-items:end}
+.bar{width:100%;max-width:44px;justify-self:center;border-radius:7px 7px 2px 2px;background:var(--bc);min-height:3px;transform-origin:bottom}
+.bars.animate .bar{animation:grow .8s cubic-bezier(.2,.8,.2,1) both}
+@keyframes grow{from{transform:scaleY(0)}}
+.bar.ok{--bc:var(--green)}.bar.warn{--bc:var(--amber)}.bar.reached{--bc:var(--orange)}.bar.exceeded{--bc:var(--red)}.bar.none{--bc:#1a2648;opacity:.7;height:3px}
+.ref{position:absolute;inset-inline:0;border-top:2px dashed rgba(34,229,255,.55);pointer-events:none}
+.ref span{position:absolute;inset-inline-start:0;top:-22px;font-size:.74rem;color:var(--cyan);background:#0d1730;padding:0 4px}
+.blabels{margin-top:8px;color:var(--muted);font-size:.72rem;text-align:center}
+.blabels span{display:block;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- settings ---------- */
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px}
+.field label{display:block;font-weight:600;margin-bottom:6px}
+.field small{display:block;color:var(--muted);margin-top:4px;font-size:.8rem}
+.field input{width:100%}
+.form-msg{min-height:1.4em;margin:6px 0 12px;font-size:.9rem}
+.form-msg.err{color:#ff9a9a}.form-msg.ok{color:var(--green)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sep{border:0;border-top:1px solid var(--border);margin:22px 0}
+.note{background:#0d1730;border:1px solid var(--border);border-radius:14px;padding:14px 16px;color:var(--muted);font-size:.9rem;line-height:1.7}
+.note strong{color:var(--text)}
+h3.sec{font-size:1rem;margin:0 0 10px;font-weight:700}
+
+/* ---------- dialog + toast ---------- */
+dialog{background:linear-gradient(160deg,#152245,#0b1530);color:var(--text);border:1px solid var(--border-hi);border-radius:20px;padding:0;width:min(92vw,470px);box-shadow:0 40px 80px -20px #000}
+dialog::backdrop{background:rgba(2,6,16,.72);backdrop-filter:blur(4px)}
+dialog[open]{animation:rise .3s ease both}
+.dlg-in{padding:24px}
+.dlg-in h3{font-size:1.15rem;margin-bottom:8px}
+.dlg-in p{color:var(--muted);margin-bottom:10px}
+.dlg-in label{display:block;margin:12px 0 6px;font-weight:600}
+.dlg-in input{width:100%}
+.dlg-act{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.dlg-act .btn{flex:1;min-width:120px;min-height:48px}
+#toasts{position:fixed;inset-inline:0;bottom:calc(16px + var(--safe-b));display:flex;flex-direction:column;align-items:center;gap:8px;z-index:100;pointer-events:none;padding:0 12px}
+.toast{max-width:min(92vw,520px);padding:12px 18px;border-radius:14px;background:#111d3b;border:1px solid var(--border-hi);box-shadow:0 18px 40px -14px #000;opacity:0;transform:translateY(14px);transition:opacity .3s,transform .3s;font-weight:600}
+.toast.in{opacity:1;transform:none}
+.toast.ok{border-color:var(--green)}.toast.warn{border-color:var(--amber);color:#ffe0a3}.toast.danger{border-color:var(--red);color:#ffc0c0;background:#2a1220}.toast.info{border-color:var(--blue)}
+
+footer{color:var(--faint);text-align:center;font-size:.8rem;padding:6px 8px}
+
+@media(max-width:600px){
+  body{padding-inline:12px}
+  .card{padding:16px}
+  .clock-time{font-size:1.7rem}
+  .metrics{gap:8px}
+  .btn.big{min-height:70px}
+  .nav .lab{min-width:0;flex:1}
+  .nav{width:100%}
+  .toolbar .grp{width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;animation-delay:0s!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">تخطي إلى المحتوى</a>
+<noscript><p style="text-align:center;padding:40px">هذا التطبيق يحتاج إلى تفعيل JavaScript.</p></noscript>
+
+<div class="shell">
+  <header class="card top" style="--i:0">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M5 28V14a11 11 0 0 1 22 0v14M12 28V18h8v10M16 5v3M3 28h26"/></svg>
+      <div>
+        <h1>Gate Time Tracker</h1>
+        <p>متتبع الحضور وأوقات الخروج من الشركة</p>
+      </div>
+    </div>
+    <div class="clock" aria-label="الوقت الحالي">
+      <div class="clock-time digits" dir="ltr"><span id="clockHM">--:--</span><small id="clockSS">:--</small></div>
+      <span class="clock-suf" id="clockSuf"></span>
+      <div class="clock-date" id="clockDate"></div>
+    </div>
+  </header>
+
+  <div class="stack" id="notices">
+    <div id="storeWarn"></div>
+    <div id="staleBox" class="stack"></div>
+    <section id="alertBox" class="alertbox" hidden aria-label="تنبيه الوقت خارج الشركة">
+      <div>
+        <strong id="alertMsg" aria-live="polite"></strong>
+      </div>
+      <span class="extra" id="alertExtra"></span>
+    </section>
+  </div>
+
+  <main id="main" class="grid">
+    <!-- الحالة والإجراءات -->
+    <section class="card c5" style="--i:1" aria-label="الحالة والإجراءات">
+      <div class="pill" id="statusPill" data-s="none"><span class="dot"></span><span id="statusText">لم يبدأ يوم العمل</span></div>
+      <p class="sub" id="statusSub"></p>
+      <div class="btns">
+        <button class="btn big start" id="btnStart" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          <span class="lbl">بدأت يوم العمل<span class="en">Start Workday</span></span>
+        </button>
+        <button class="btn big out" id="btnOut" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5M10 8l-4 4 4 4M6 12h10"/></svg>
+          <span class="lbl">تسجيل خروج<span class="en">Clock Out</span></span>
+        </button>
+        <button class="btn big in" id="btnIn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5M14 8l4 4-4 4M18 12H8"/></svg>
+          <span class="lbl">تسجيل دخول<span class="en">Clock In</span></span>
+        </button>
+        <button class="btn end" id="btnEnd" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          <span class="lbl">إنهاء يوم العمل<span class="en">End Workday</span></span>
+        </button>
+      </div>
+      <button class="link" id="btnUndoEnd" type="button" hidden>التراجع عن إنهاء يوم العمل</button>
+    </section>
+
+    <!-- موعد الانصراف -->
+    <section class="card c7 leave" style="--i:2" aria-label="موعد الانصراف المتوقع">
+      <h2 id="leaveTitle">موعد الانصراف المتوقع</h2>
+      <div class="leave-time dim" id="leaveTime" dir="rtl">
+        <span class="hm digits" id="leaveHM">--:--</span>
+        <span class="ss digits" id="leaveSS"></span>
+        <span class="suf" id="leaveSuf"></span>
+      </div>
+      <p class="leave-line" id="leaveBase">سيظهر الموعد بعد بدء يوم العمل.</p>
+      <div class="chips" id="leaveChips"></div>
+      <p class="leave-line" id="leaveRemain"></p>
+      <div class="leave-result" id="leaveResult" hidden></div>
+    </section>
+
+    <!-- الوقت خارج الشركة -->
+    <section class="card c7 alloc" id="allocCard" data-level="ok" style="--i:3" aria-label="الوقت خارج الشركة">
+      <h2>الوقت خارج الشركة اليوم</h2>
+      <div class="metrics">
+        <div class="metric main"><div class="k">إجمالي الخروج</div><div class="v" id="outTotal">00:00</div></div>
+        <div class="metric"><div class="k">المتبقي من المسموح</div><div class="v" id="outRemain">30:00</div></div>
+        <div class="metric ex"><div class="k">الوقت الزائد</div><div class="v" id="outExcess">00:00</div></div>
+      </div>
+      <div class="pcts"><span>نسبة استهلاك الحد اليومي</span><strong id="pctText">0%</strong></div>
+      <div class="track" id="track" role="progressbar" aria-label="نسبة استهلاك الوقت المسموح خارج الشركة" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="fill" id="fill"></div>
+        <div class="tick" id="tick" title="حد التنبيه"></div>
+      </div>
+      <div class="scale"><span>0</span><span id="limitLabel">30 د</span></div>
+    </section>
+
+    <!-- التفاصيل -->
+    <section class="card c5" style="--i:4" aria-label="تفاصيل اليوم">
+      <h2>تفاصيل اليوم</h2>
+      <dl class="dl">
+        <div><dt>بداية العمل المجدولة</dt><dd id="dSchedStart">—</dd></div>
+        <div><dt>بدء يوم العمل (أول حضور)</dt><dd id="dStart">—</dd></div>
+        <div><dt>التأخير</dt><dd id="dLate">—</dd></div>
+        <div><dt>نهاية العمل المجدولة</dt><dd id="dSchedEnd">—</dd></div>
+        <div><dt>الانصراف المتوقع (بعد التعديل)</dt><dd class="cy" id="dExpected">—</dd></div>
+        <div><dt>الانصراف الفعلي</dt><dd id="dActual">—</dd></div>
+        <div><dt>الفرق عن موعد الانصراف</dt><dd id="dDiff">—</dd></div>
+        <div><dt>آخر حركة مسجلة</dt><dd id="dLast">—</dd></div>
+      </dl>
+    </section>
+
+    <!-- السجل والتقارير والإعدادات -->
+    <section class="card c12 tabs-card" style="--i:5">
+      <div class="tabs" role="tablist" aria-label="الأقسام">
+        <button class="tab" role="tab" id="tab-log" data-tab="log" aria-selected="true" aria-controls="panel-log" type="button">سجل الحركة</button>
+        <button class="tab" role="tab" id="tab-reports" data-tab="reports" aria-selected="false" tabindex="-1" aria-controls="panel-reports" type="button">التقارير</button>
+        <button class="tab" role="tab" id="tab-settings" data-tab="settings" aria-selected="false" tabindex="-1" aria-controls="panel-settings" type="button">الإعدادات والبيانات</button>
+      </div>
+
+      <div class="panel" id="panel-log" role="tabpanel" aria-labelledby="tab-log">
+        <div class="toolbar">
+          <div class="grp">
+            <label for="logFilter" class="muted">عرض:</label>
+            <select id="logFilter">
+              <option value="today">اليوم</option>
+              <option value="week" selected>آخر 7 أيام</option>
+              <option value="all">كل السجلات</option>
+            </select>
+          </div>
+        </div>
+        <div id="logBody"></div>
+      </div>
+
+      <div class="panel" id="panel-reports" role="tabpanel" aria-labelledby="tab-reports" hidden>
+        <div class="toolbar">
+          <div class="seg" role="group" aria-label="نوع التقرير">
+            <button type="button" id="viewWeek" aria-pressed="true">أسبوعي</button>
+            <button type="button" id="viewMonth" aria-pressed="false">شهري</button>
+          </div>
+          <div class="nav">
+            <button type="button" id="repPrev" aria-label="الفترة السابقة">›</button>
+            <span class="lab" id="repLabel"></span>
+            <button type="button" id="repNext" aria-label="الفترة التالية">‹</button>
+          </div>
+          <button class="btn sm ghost" type="button" id="exportPeriod">تصدير التقرير CSV</button>
+        </div>
+        <div id="repBody"></div>
+      </div>
+
+      <div class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <h3 class="sec">الإعدادات</h3>
+        <div class="form">
+          <div class="field"><label for="sStart">بداية العمل المجدولة</label><input type="time" id="sStart"><small>تُستخدم لحساب التأخير.</small></div>
+          <div class="field"><label for="sEnd">نهاية العمل المجدولة</label><input type="time" id="sEnd"><small>مرجع فقط، وتختلف عن موعد الانصراف المتوقع.</small></div>
+          <div class="field"><label for="sDur">مدة العمل المطلوبة (ساعات)</label><input type="number" id="sDur" min="0.5" max="24" step="0.25"><small>الانصراف المتوقع = وقت البدء + هذه المدة + الوقت الزائد.</small></div>
+          <div class="field"><label for="sAllow">الوقت المسموح خارج الشركة (دقائق)</label><input type="number" id="sAllow" min="1" max="480" step="1"></div>
+          <div class="field"><label for="sWarn">حد التنبيه (% من الوقت المسموح)</label><input type="number" id="sWarn" min="1" max="100" step="1"><small>مثال: 80% من 30 دقيقة = عند الدقيقة 24.</small></div>
+        </div>
+        <div class="form-msg" id="setMsg" role="status"></div>
+        <div class="row">
+          <button class="btn sm" type="button" id="saveSettings" style="background:linear-gradient(180deg,#4a90ff,#2a62d9);border-color:#7db0ff">حفظ الإعدادات</button>
+          <button class="btn sm ghost" type="button" id="resetSettings">استعادة الافتراضي</button>
+          <button class="btn sm ghost" type="button" id="btnNotif">تفعيل إشعارات المتصفح</button>
+          <span class="muted" id="notifState"></span>
+        </div>
+        <p class="muted" style="margin-top:10px;font-size:.85rem">تُطبَّق التغييرات على يوم العمل الحالي والأيام القادمة. الأيام السابقة تحتفظ بالإعدادات التي سُجلت بها.</p>
+
+        <hr class="sep">
+        <h3 class="sec">البيانات</h3>
+        <div class="row">
+          <button class="btn sm ghost" type="button" id="exportAll">تصدير كل السجلات CSV</button>
+          <button class="btn sm ghost" type="button" id="exportJson">نسخة احتياطية JSON</button>
+          <button class="btn sm ghost" type="button" id="importJson">استعادة من نسخة احتياطية</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+          <button class="btn sm danger" type="button" id="wipeAll">حذف كل السجلات</button>
+        </div>
+        <div class="note" style="margin-top:16px">
+          <strong>أين تُحفظ بياناتك؟</strong> في التخزين المحلي (localStorage) لهذا المتصفح على هذا الجهاز فقط. لا يوجد خادم أو حساب، ولا تتم مزامنة البيانات مع أجهزة أخرى.
+          مسح بيانات التصفح أو استخدام وضع التصفح الخاص قد يحذفها، لذا يُنصح بأخذ نسخة احتياطية بين حين وآخر.
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer>Gate Time Tracker — تعمل بدون اتصال بالإنترنت، وتُحفظ البيانات محليًا في هذا المتصفح.</footer>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <div class="dlg-in">
+    <h3 id="dlgTitle"></h3>
+    <div id="dlgBody"></div>
+    <div class="dlg-act" id="dlgActions"></div>
+  </div>
+</dialog>
+<div id="toasts" aria-live="polite" role="status"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   Constants & state
+   ========================================================= */
+const STORE_KEY = 'gateTimeTracker.v1';
+const DEFAULTS = { schedStart:'09:00', schedEnd:'17:00', durationH:9, allowanceMin:30, warnPct:80 };
+const WEEKDAYS = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+let state = { v:1, settings:{...DEFAULTS}, days:{} };
+let storageOK = true;
+let activeKey = null;
+let lastKey = null;
+let tickN = 0;
+let repView = 'week';
+const repOff = { week:0, month:0 };
+let loadNotice = '';
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,'0');
+const isNum = v => typeof v === 'number' && Number.isFinite(v);
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const keyToDate = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
+const setText = (id, t) => { const e = $(id); if (e && e.textContent !== t) e.textContent = t; };
+
+/* =========================================================
+   Formatting
+   ========================================================= */
+function timeParts(ts, secs){
+  const d = new Date(ts); let h = d.getHours(); const suf = h >= 12 ? 'م' : 'ص'; h = h % 12 || 12;
+  return { hm:`${pad(h)}:${pad(d.getMinutes())}`, ss:`:${pad(d.getSeconds())}`, suf };
+}
+function fmtTime(ts, secs){
+  if (ts == null) return '—';
+  const p = timeParts(ts);
+  return `${p.hm}${secs ? p.ss : ''} ${p.suf}`;
+}
+function fmt24(ts){ if (ts == null) return ''; const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+function fmtHMS(ms){
+  const s = Math.max(0, Math.round(ms/1000)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return h > 0 ? `${h}:${pad(m)}:${pad(x)}` : `${pad(m)}:${pad(x)}`;
+}
+function fmtDur(ms){
+  const s = Math.max(0, Math.round(ms/1000)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  if (h > 0){ const t = Math.round(s/60), hh = Math.floor(t/60), mm = t%60; return mm ? `${hh} س ${mm} د` : `${hh} س`; }
+  if (m > 0) return x ? `${m} د ${x} ث` : `${m} د`;
+  return x ? `${x} ث` : '0 د';
+}
+function fmtLong(ms){
+  const t = Math.max(0, Math.round(ms/60000)); const h = Math.floor(t/60), m = t%60;
+  const hp = h === 1 ? 'ساعة' : h === 2 ? 'ساعتين' : h >= 3 && h <= 10 ? `${h} ساعات` : `${h} ساعة`;
+  if (h === 0) return m === 1 ? 'دقيقة' : m === 2 ? 'دقيقتين' : m <= 10 ? `${m} دقائق` : `${m} دقيقة`;
+  return m ? `${hp} و${m} دقيقة` : hp;
+}
+function fmtDateLong(ts){
+  const d = new Date(ts);
+  try { return d.toLocaleDateString('ar-EG-u-nu-latn',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
+  catch(e){ return `${WEEKDAYS[d.getDay()]} ${dayKey(d)}`; }
+}
+function fmtMonthDay(d){
+  try { return d.toLocaleDateString('ar-EG-u-nu-latn',{day:'numeric',month:'long'}); }
+  catch(e){ return `${pad(d.getDate())}/${pad(d.getMonth()+1)}`; }
+}
+const fmtDMY = k => { const [y,m,d] = k.split('-'); return `${d}/${m}/${y}`; };
+function hoursText(h){
+  if (h === 1) return 'ساعة'; if (h === 2) return 'ساعتان';
+  return Number.isInteger(h) && h <= 10 ? `${h} ساعات` : `${h} ساعة`;
+}
+const mins2 = ms => (ms/60000).toFixed(2);
+
+/* =========================================================
+   Storage
+   ========================================================= */
+function cleanCfg(c){
+  const r = { ...DEFAULTS };
+  if (c && typeof c === 'object'){
+    const t = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (t.test(c.schedStart)) r.schedStart = c.schedStart;
+    if (t.test(c.schedEnd)) r.schedEnd = c.schedEnd;
+    if (isNum(c.durationH) && c.durationH >= .5 && c.durationH <= 24) r.durationH = c.durationH;
+    if (isNum(c.allowanceMin) && c.allowanceMin >= 1 && c.allowanceMin <= 480) r.allowanceMin = c.allowanceMin;
+    if (isNum(c.warnPct) && c.warnPct >= 1 && c.warnPct <= 100) r.warnPct = c.warnPct;
+  }
+  return r;
+}
+function sanitize(p){
+  if (!p || typeof p !== 'object') throw new Error('invalid');
+  const out = { v:1, settings:cleanCfg(p.settings), days:{} };
+  const days = p.days && typeof p.days === 'object' ? p.days : {};
+  for (const k of Object.keys(days)){
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
+    const d = days[k]; if (!d || !isNum(d.start)) continue;
+    const outs = (Array.isArray(d.outs) ? d.outs : [])
+      .filter(o => o && isNum(o.out) && (o.in == null || isNum(o.in)))
+      .map(o => ({ out:o.out, in:o.in == null ? null : o.in, manual:!!o.manual }))
+      .sort((a,b) => a.out - b.out);
+    const n = d.notified || {};
+    out.days[k] = {
+      key:k, start:d.start, end:isNum(d.end) ? d.end : null, incomplete:!!d.incomplete, endManual:!!d.endManual,
+      cfg:cleanCfg(d.cfg || out.settings), outs,
+      notified:{ warn:!!n.warn, reached:!!n.reached, exceeded:!!n.exceeded }
+    };
+  }
+  return out;
+}
+function load(){
+  let raw = null;
+  try { raw = localStorage.getItem(STORE_KEY); } catch(e){ storageOK = false; }
+  if (!raw) return;
+  try { state = sanitize(JSON.parse(raw)); }
+  catch(e){
+    try { localStorage.setItem(`${STORE_KEY}.corrupt.${Date.now()}`, raw); } catch(_){}
+    state = { v:1, settings:{...DEFAULTS}, days:{} };
+    loadNotice = 'تعذّرت قراءة البيانات المحفوظة لأنها تالفة، فبدأ التطبيق ببيانات فارغة. حُفظت نسخة من البيانات التالفة في التخزين المحلي.';
+  }
+}
+function probeStorage(){
+  try { localStorage.setItem('__gtt_probe','1'); localStorage.removeItem('__gtt_probe'); }
+  catch(e){ storageOK = false; }
+}
+function save(){
+  if (!storageOK) return false;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); return true; }
+  catch(e){ storageOK = false; renderStoreWarn(); return false; }
+}
+function renderStoreWarn(){
+  const parts = [];
+  if (!storageOK) parts.push(`<div class="banner red"><div><strong>التخزين المحلي غير متاح</strong><p>لن تُحفظ البيانات بعد إغلاق الصفحة. تأكد أنك لا تستخدم وضع التصفح الخاص، ثم أعد فتح الملف.</p></div></div>`);
+  if (loadNotice) parts.push(`<div class="banner amber"><div><strong>${loadNotice}</strong></div><button class="btn sm ghost" type="button" data-dismiss-load>حسنًا</button></div>`);
+  $('storeWarn').innerHTML = parts.join('');
+}
+
+/* =========================================================
+   Core calculations
+   ========================================================= */
+const isOpen = d => !!d && isNum(d.start) && !d.end && !d.incomplete;
+
+function getActiveDay(now){
+  const t = state.days[dayKey(new Date(now))];
+  if (t) return t;
+  // a day left open from before midnight stays active for a limited time
+  const opens = Object.values(state.days).filter(isOpen).sort((a,b) => b.start - a.start);
+  const c = opens[0];
+  if (c && now >= c.start && now - c.start < (c.cfg.durationH + 4) * 3600000) return c;
+  return null;
+}
+function sync(now){ const d = getActiveDay(now); activeKey = d ? d.key : null; return d; }
+
+function computeDay(day, now){
+  const cfg = day.cfg;
+  const live = isOpen(day) && day.key === activeKey;
+  const allowMs = cfg.allowanceMin * 60000;
+  const durMs = Math.round(cfg.durationH * 3600000);
+  let out = 0, unknown = false, openSince = null;
+  day.outs.forEach((iv, i) => {
+    if (iv.in != null) out += Math.max(0, iv.in - iv.out);
+    else if (live && i === day.outs.length - 1){ out += Math.max(0, now - iv.out); openSince = iv.out; }
+    else unknown = true;
+  });
+  out = Math.floor(out / 1000) * 1000;
+  const excess = Math.max(0, out - allowMs);
+  const remain = Math.max(0, allowMs - out);
+  const pct = allowMs > 0 ? out / allowMs * 100 : 0;
+  let level = 'ok';
+  if (out > allowMs) level = 'exceeded';
+  else if (out === allowMs) level = 'reached';
+  else if (pct >= cfg.warnPct) level = 'warn';
+  const base = day.start + durMs;
+  const adj = base + excess;
+  const dd = keyToDate(day.key);
+  const [sh, sm] = cfg.schedStart.split(':').map(Number);
+  const [eh, em] = cfg.schedEnd.split(':').map(Number);
+  const schedStartTs = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate(), sh, sm).getTime();
+  let schedEndTs = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate(), eh, em).getTime();
+  if (schedEndTs <= schedStartTs) schedEndTs += 86400000;
+  const lateMs = Math.floor(Math.max(0, day.start - schedStartTs) / 1000) * 1000;
+  let status;
+  if (day.end) status = 'ended';
+  else if (day.incomplete) status = 'incomplete';
+  else status = openSince != null ? 'outside' : 'inside';
+  return {
+    cfg, live, allowMs, durMs, outMs:out, excessMs:excess, remainMs:remain, pct, level,
+    baseLeave:base, adjLeave:adj, schedStartTs, schedEndTs, lateMs, status, openSince,
+    unknownOpen:unknown, diffMs: day.end ? day.end - adj : null
+  };
+}
+
+function eventsOf(day){
+  const ev = [{ type:'start', ts:day.start }];
+  day.outs.forEach(iv => {
+    ev.push({ type:'out', ts:iv.out, open: iv.in == null });
+    if (iv.in != null) ev.push({ type:'in', ts:iv.in, dur:Math.max(0, iv.in - iv.out), manual:iv.manual });
+  });
+  if (day.end) ev.push({ type:'end', ts:day.end, manual:day.endManual });
+  ev.sort((a,b) => a.ts - b.ts);
+  return ev;
+}
+const EV_LABEL = { start:'بدء يوم العمل', out:'خروج', in:'دخول', end:'إنهاء يوم العمل' };
+
+/* =========================================================
+   UI helpers: toast + dialog
+   ========================================================= */
+function toast(msg, type = 'info', ms = 4200){
+  const box = $('toasts');
+  while (box.children.length >= 4) box.firstChild.remove();
+  const t = document.createElement('div');
+  t.className = `toast ${type}`; t.textContent = msg; box.append(t);
+  requestAnimationFrame(() => t.classList.add('in'));
+  setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 400); }, ms);
+}
+function ask({ title, body, node, buttons }){
+  return new Promise(resolve => {
+    const dlg = $('dlg');
+    $('dlgTitle').textContent = title;
+    const b = $('dlgBody'); b.replaceChildren();
+    if (body){ const p = document.createElement('p'); p.textContent = body; b.append(p); }
+    if (node) b.append(node);
+    const act = $('dlgActions'); act.replaceChildren();
+    let val = 'cancel';
+    buttons.forEach(x => {
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = `btn ${x.cls || ''}`; btn.textContent = x.label;
+      btn.addEventListener('click', () => { val = x.value; dlg.close(); });
+      act.append(btn);
+    });
+    dlg.onclose = () => resolve(val);
+    dlg.showModal();
+  });
+}
+
+/* =========================================================
+   Actions
+   ========================================================= */
+function startWorkday(){
+  const now = Date.now(); const key = dayKey(new Date(now));
+  if (state.days[key]){ toast('لقد بدأت يوم العمل لهذا التاريخ بالفعل.', 'warn'); return; }
+  if (sync(now)){ toast('يوجد يوم عمل مفتوح بالفعل. أنهِه أولًا.', 'warn'); return; }
+  state.days[key] = { key, start:now, end:null, incomplete:false, endManual:false, cfg:{...state.settings}, outs:[], notified:{warn:false,reached:false,exceeded:false} };
+  save(); renderAll();
+  toast(`تم تسجيل بدء يوم العمل الساعة ${fmtTime(now)}`, 'ok');
+}
+function clockOut(){
+  const now = Date.now(); const day = sync(now);
+  if (!isOpen(day)){ toast('ابدأ يوم العمل أولًا.', 'warn'); return; }
+  const last = day.outs[day.outs.length - 1];
+  if (last && last.in == null){ toast('أنت خارج الشركة بالفعل. سجّل الدخول أولًا.', 'warn'); return; }
+  day.outs.push({ out:now, in:null, manual:false });
+  save(); renderAll();
+  toast(`تم تسجيل الخروج الساعة ${fmtTime(now, true)}`, 'info');
+}
+function clockIn(){
+  const now = Date.now(); const day = sync(now);
+  const last = isOpen(day) && day.outs[day.outs.length - 1];
+  if (!last || last.in != null){ toast('لا توجد فترة خروج مفتوحة لتسجيل الدخول.', 'warn'); return; }
+  last.in = now;
+  save(); renderAll(); checkAlerts(now);
+  toast(`تم تسجيل الدخول. مدة هذه الفترة ${fmtDur(now - last.out)}`, 'ok');
+}
+async function endWorkday(){
+  const now0 = Date.now(); const day = sync(now0);
+  if (!isOpen(day)){ toast('لا يوجد يوم عمل مفتوح لإنهائه.', 'warn'); return; }
+  const last = day.outs[day.outs.length - 1];
+  const outside = last && last.in == null;
+  let v;
+  const early = computeDay(day, now0).adjLeave - now0;
+  const earlyTxt = early >= 60000
+    ? `تنبيه: لم يحن موعد الانصراف المتوقع (${fmtTime(computeDay(day, now0).adjLeave)}) بعد. إذا أنهيت الآن فستنصرف قبل الموعد بمقدار ${fmtLong(early)}.`
+    : '';
+  if (outside){
+    v = await ask({
+      title:'أنت خارج الشركة حاليًا',
+      body:('فترة الخروج ما زالت مفتوحة ولا يمكن تجاهلها. يمكنك تسجيل الدخول الآن ثم إنهاء اليوم، أو الرجوع. ' + earlyTxt).trim(),
+      buttons:[{label:'تسجيل الدخول وإنهاء اليوم', value:'both', cls:early >= 60000 ? 'danger' : 'out'},{label:'رجوع', value:'cancel', cls:'ghost'}]
+    });
+  } else {
+    v = await ask({
+      title: early >= 60000 ? 'ستنصرف قبل الموعد!' : 'إنهاء يوم العمل؟',
+      body:(earlyTxt || 'سيتم تسجيل وقت الانصراف الفعلي الآن وإغلاق يوم العمل.'),
+      buttons:[{label: early >= 60000 ? 'إنهاء اليوم رغم ذلك' : 'إنهاء اليوم', value:'both', cls:early >= 60000 ? 'danger' : 'out'},{label:'إلغاء', value:'cancel', cls:'ghost'}]
+    });
+  }
+  if (v !== 'both') return;
+  const now = Date.now();
+  if (!isOpen(day)) return;
+  const l2 = day.outs[day.outs.length - 1];
+  if (l2 && l2.in == null) l2.in = now;
+  day.end = now; day.endManual = false;
+  save(); renderAll();
+  const c = computeDay(day, now);
+  const diff = c.diffMs;
+  let txt = `تم إنهاء يوم العمل الساعة ${fmtTime(now)}.`;
+  if (diff <= -60000) txt += ` انصرفت مبكرًا: قبل الموعد المتوقع بـ ${fmtLong(-diff)}.`;
+  else if (diff >= 60000) txt += ` بعد الموعد المتوقع بـ ${fmtLong(diff)}.`;
+  toast(txt, diff <= -60000 ? 'warn' : 'ok', diff <= -60000 ? 12000 : 6000);
+}
+async function undoEnd(){
+  const day = sync(Date.now());
+  if (!day || !day.end) return;
+  const v = await ask({ title:'التراجع عن إنهاء اليوم؟', body:'سيُحذف وقت الانصراف المسجل ويعود يوم العمل مفتوحًا.', buttons:[{label:'تراجع عن الإنهاء', value:'yes', cls:'out'},{label:'إلغاء', value:'cancel', cls:'ghost'}] });
+  if (v !== 'yes') return;
+  day.end = null; day.endManual = false;
+  // reopen the interval that was closed automatically at end time, if any
+  save(); renderAll(); toast('أُعيد فتح يوم العمل.', 'info');
+}
+async function closeStale(key){
+  const day = state.days[key]; const now = Date.now();
+  if (!isOpen(day)) return;
+  const wrap = document.createElement('div');
+  const lab = document.createElement('label'); lab.textContent = 'وقت الانصراف الفعلي'; lab.htmlFor = 'staleTime';
+  const inp = document.createElement('input'); inp.type = 'datetime-local'; inp.id = 'staleTime';
+  const toLocal = ts => { const d = new Date(ts); return `${dayKey(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  inp.min = toLocal(day.start); inp.max = toLocal(now); inp.value = toLocal(Math.min(now, day.start + Math.round(day.cfg.durationH*3600000)));
+  wrap.append(lab, inp);
+  const last = day.outs[day.outs.length - 1];
+  if (last && last.in == null){
+    const p = document.createElement('p'); p.style.marginTop = '10px';
+    p.textContent = 'ملاحظة: توجد فترة خروج مفتوحة، وسيُعتبر هذا الوقت وقت دخولك وانصرافك معًا.';
+    wrap.append(p);
+  }
+  const v = await ask({
+    title:`إغلاق يوم ${fmtDateLong(day.start)}`,
+    body:'لن يخترع التطبيق وقت انصراف. أدخل الوقت الفعلي إن كنت تعرفه، أو أغلق اليوم كيوم غير مكتمل.',
+    node:wrap,
+    buttons:[{label:'تسجيل هذا الوقت', value:'time', cls:'out'},{label:'إغلاق كغير مكتمل', value:'incomplete', cls:'ghost'},{label:'إلغاء', value:'cancel', cls:'ghost'}]
+  });
+  if (v === 'time'){
+    const t = new Date(inp.value).getTime();
+    const l = day.outs[day.outs.length - 1];
+    if (!isNum(t) || t < day.start || t > Date.now() + 60000 || (l && l.in == null && t < l.out)){
+      toast('الوقت المُدخل غير صالح. يجب أن يكون بعد بدء اليوم وليس في المستقبل.', 'danger'); return;
+    }
+    if (l && l.in == null){ l.in = t; l.manual = true; }
+    day.end = t; day.endManual = true;
+    save(); renderAll(); toast('تم إغلاق اليوم بالوقت الذي أدخلته.', 'ok');
+  } else if (v === 'incomplete'){
+    day.incomplete = true;
+    save(); renderAll(); toast('أُغلق اليوم كغير مكتمل دون وقت انصراف.', 'info');
+  }
+}
+async function deleteDay(key){
+  const d = state.days[key]; if (!d) return;
+  const v = await ask({ title:'حذف سجل اليوم؟', body:`سيُحذف سجل ${fmtDateLong(d.start)} نهائيًا ولا يمكن التراجع.`, buttons:[{label:'حذف نهائيًا', value:'yes', cls:'danger'},{label:'إلغاء', value:'cancel', cls:'ghost'}] });
+  if (v !== 'yes') return;
+  delete state.days[key]; save(); renderAll(); toast('تم حذف السجل.', 'info');
+}
+
+/* =========================================================
+   Alerts (fired once per level per day)
+   ========================================================= */
+function checkAlerts(now){
+  const day = sync(now); if (!isOpen(day)) return;
+  const c = computeDay(day, now); const n = day.notified;
+  const names = ['', 'warn', 'reached', 'exceeded'];
+  const rank = c.level === 'exceeded' ? 3 : c.level === 'reached' ? 2 : c.level === 'warn' ? 1 : 0;
+  let fire = 0, changed = false;
+  for (let i = 1; i <= rank; i++) if (!n[names[i]]){ n[names[i]] = true; fire = i; changed = true; }
+  if (!changed) return;
+  save();
+  const msgs = [null, alertMsg('warn', day.cfg), alertMsg('reached'), alertMsg('exceeded')];
+  toast(msgs[fire], fire === 3 ? 'danger' : 'warn', 9000);
+  try {
+    if ('Notification' in window && Notification.permission === 'granted')
+      new Notification('Gate Time Tracker', { body:msgs[fire], tag:`gtt-${day.key}-${fire}` });
+  } catch(e){}
+}
+function alertMsg(level, cfg){
+  if (level === 'warn') return `تنبيه: استهلكت ${cfg.warnPct}% من الوقت المسموح خارج الشركة.`;
+  if (level === 'reached') return 'وصلت إلى الحد اليومي المسموح.';
+  return 'تجاوزت الحد اليومي. سيتم إضافة الوقت الزائد إلى ميعاد الانصراف.';
+}
+
+/* =========================================================
+   Rendering: dashboard (runs every second)
+   ========================================================= */
+let prevStatus = null, prevLevel = 'ok';
+function renderLive(now){
+  const d = new Date(now);
+  const cp = timeParts(now);
+  setText('clockHM', cp.hm); setText('clockSS', cp.ss); setText('clockSuf', cp.suf);
+  setText('clockDate', fmtDateLong(now));
+
+  const day = sync(now);
+  const c = day ? computeDay(day, now) : null;
+  const cfg = c ? c.cfg : state.settings;
+  const st = c ? c.status : 'none';
+
+  // status
+  const labels = { none:'لم يبدأ يوم العمل', inside:'داخل الشركة', outside:'خارج الشركة', ended:'انتهى يوم العمل', incomplete:'يوم غير مكتمل' };
+  const pill = $('statusPill'); pill.dataset.s = st;
+  if (prevStatus !== st){
+    const t = $('statusText'); t.textContent = labels[st];
+    t.classList.remove('flip'); void t.offsetWidth; t.classList.add('flip');
+    prevStatus = st;
+  }
+  let sub = 'اضغط «بدأت يوم العمل» لتسجيل حضورك.';
+  if (c){
+    if (st === 'inside') sub = `بدأ يوم العمل الساعة ${fmtTime(day.start)}`;
+    else if (st === 'outside') sub = `خرجت الساعة ${fmtTime(c.openSince, true)} — مدة هذه الفترة ${fmtHMS(now - c.openSince)}`;
+    else sub = `انتهى الساعة ${fmtTime(day.end)}`;
+  }
+  setText('statusSub', sub);
+
+  // buttons
+  $('btnStart').disabled = !!day;
+  $('btnStart').title = day ? (day.end ? 'تم إنهاء يوم العمل لهذا التاريخ.' : 'يوم العمل بدأ بالفعل.') : '';
+  $('btnOut').disabled = st !== 'inside';
+  $('btnIn').disabled = st !== 'outside';
+  $('btnEnd').disabled = !(st === 'inside' || st === 'outside');
+  $('btnUndoEnd').hidden = st !== 'ended';
+
+  // leave card
+  const lt = $('leaveTime');
+  if (c){
+    const p = timeParts(c.adjLeave);
+    setText('leaveHM', p.hm); setText('leaveSS', p.ss); setText('leaveSuf', p.suf);
+    lt.classList.remove('dim');
+    setText('leaveBase', `الموعد الأساسي ${fmtTime(c.baseLeave)} (البدء + ${hoursText(cfg.durationH)})`);
+    const chips = c.excessMs > 0
+      ? `<span class="chip amber">+${fmtDur(c.excessMs)} أُضيفت بسبب تجاوز الحد</span>`
+      : `<span class="chip green">لا توجد زيادة</span>`;
+    const chipHtml = chips + (c.unknownOpen ? '<span class="chip red">فترة خروج مفتوحة غير محسوبة</span>' : '');
+    if ($('leaveChips').dataset.h !== chipHtml){ $('leaveChips').innerHTML = chipHtml; $('leaveChips').dataset.h = chipHtml; }
+    if (st === 'inside' || st === 'outside'){
+      const left = c.adjLeave - now;
+      setText('leaveRemain', left > 0 ? `متبقٍ على الانصراف ${fmtHMS(left)}` : `يمكنك الانصراف الآن. مضى ${fmtDur(-left)} على الموعد.`);
+    } else setText('leaveRemain', '');
+    const res = $('leaveResult');
+    if (st === 'ended'){
+      const diff = c.diffMs; let txt;
+      if (Math.abs(diff) < 60000) txt = 'انصرفت في الموعد المتوقع تمامًا.';
+      else txt = diff > 0 ? `انصرفت بعد الموعد المتوقع بـ ${fmtLong(diff)}` : `انصرفت مبكرًا: قبل الموعد المتوقع بـ ${fmtLong(-diff)}`;
+      res.hidden = false; res.classList.toggle('late', diff < -60000);
+      const h = `<strong>الانصراف الفعلي ${fmtTime(day.end, true)}</strong><br>${txt}`;
+      if (res.dataset.h !== h){ res.innerHTML = h; res.dataset.h = h; }
+    } else { res.hidden = true; res.dataset.h = ''; }
+  } else {
+    lt.classList.add('dim');
+    setText('leaveHM', '--:--'); setText('leaveSS', ''); setText('leaveSuf', '');
+    setText('leaveBase', 'سيظهر الموعد بعد بدء يوم العمل.');
+    $('leaveChips').innerHTML = ''; $('leaveChips').dataset.h = '';
+    setText('leaveRemain', ''); $('leaveResult').hidden = true;
+  }
+
+  // allowance
+  const allowMs = cfg.allowanceMin * 60000;
+  const outMs = c ? c.outMs : 0;
+  const level = c ? c.level : 'ok';
+  $('allocCard').dataset.level = level;
+  setText('outTotal', fmtHMS(outMs));
+  setText('outRemain', fmtHMS(c ? c.remainMs : allowMs));
+  setText('outExcess', fmtHMS(c ? c.excessMs : 0));
+  const pct = c ? c.pct : 0;
+  setText('pctText', `${Math.min(999, Math.floor(pct))}%`);
+  $('fill').style.width = `${Math.min(100, pct)}%`;
+  $('tick').style.insetInlineStart = `${cfg.warnPct}%`;
+  const pn = String(Math.min(100, Math.floor(pct)));
+  if ($('track').getAttribute('aria-valuenow') !== pn) $('track').setAttribute('aria-valuenow', pn);
+  setText('limitLabel', `الحد ${cfg.allowanceMin} د`);
+
+  // alert banner
+  const box = $('alertBox');
+  if (c && isOpen(day) && level !== 'ok'){
+    const wasHidden = box.hidden;
+    box.hidden = false; box.dataset.level = level;
+    setText('alertMsg', alertMsg(level, cfg));
+    setText('alertExtra',
+      level === 'exceeded' ? `الوقت الزائد ${fmtHMS(c.excessMs)} — الانصراف المعدّل ${fmtTime(c.adjLeave, true)}`
+      : `المتبقي من المسموح ${fmtHMS(c.remainMs)}`);
+    if (level === 'exceeded' && (wasHidden || prevLevel !== 'exceeded')){ box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); }
+  } else { box.hidden = true; }
+  prevLevel = level;
+
+  // details
+  setText('dSchedStart', fmtTime(dateAt(now, day, cfg.schedStart)));
+  setText('dSchedEnd', fmtTime(dateAt(now, day, cfg.schedEnd)));
+  if (c){
+    setText('dStart', fmtTime(day.start, true));
+    const dl = $('dLate');
+    if (c.lateMs > 0){ setText('dLate', fmtDur(c.lateMs)); dl.className = 'bad'; }
+    else { setText('dLate', 'في الموعد'); dl.className = 'good'; }
+    setText('dExpected', fmtTime(c.adjLeave, true));
+    setText('dActual', day.end ? fmtTime(day.end, true) + (day.endManual ? ' (يدوي)' : '') : (st === 'incomplete' ? 'غير مسجل' : 'لم يُسجَّل بعد'));
+    const dd2 = $('dDiff');
+    if (day.end){
+      if (c.diffMs <= -60000){ setText('dDiff', `مبكر بـ ${fmtLong(-c.diffMs)}`); dd2.className = 'bad'; }
+      else if (c.diffMs >= 60000){ setText('dDiff', `بعد الموعد بـ ${fmtLong(c.diffMs)}`); dd2.className = ''; }
+      else { setText('dDiff', 'في الموعد'); dd2.className = 'good'; }
+    } else { setText('dDiff', '—'); dd2.className = ''; }
+    const ev = eventsOf(day); const le = ev[ev.length - 1];
+    setText('dLast', `${EV_LABEL[le.type]} — ${fmtTime(le.ts, true)}`);
+  } else {
+    setText('dStart', '—'); setText('dLate', '—'); $('dLate').className = '';
+    setText('dExpected', '—'); setText('dActual', '—'); setText('dLast', '—'); setText('dDiff', '—'); $('dDiff').className = '';
+  }
+
+  // tab title shows the live outside timer
+  document.title = st === 'outside' ? `خارج ${fmtHMS(now - c.openSince)} — Gate Time Tracker` : 'Gate Time Tracker — متتبع الحضور والانصراف';
+  return c;
+}
+function dateAt(now, day, hhmm){
+  const base = day ? keyToDate(day.key) : new Date(now);
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m).getTime();
+}
+
+/* =========================================================
+   Rendering: stale days, log, reports
+   ========================================================= */
+function renderStale(){
+  const list = Object.values(state.days).filter(d => isOpen(d) && d.key !== activeKey).sort((a,b) => a.start - b.start);
+  $('staleBox').innerHTML = list.map(d => `
+    <div class="banner amber">
+      <div><strong>يوم عمل لم يُنهَ: ${fmtDateLong(d.start)}</strong>
+      <p>بدأ الساعة ${fmtTime(d.start)} ولا يوجد له وقت انصراف. سيظل معلَّمًا كيوم غير مكتمل حتى تغلقه.</p></div>
+      <button class="btn sm" type="button" data-close="${d.key}">إغلاق اليوم</button>
+    </div>`).join('');
+}
+
+function statusChip(day, c){
+  if (day.end) return '<span class="chip violet">مكتمل</span>';
+  if (day.incomplete) return '<span class="chip amber">غير مكتمل</span>';
+  if (c.live) return '<span class="chip blue">جارٍ الآن</span>';
+  return '<span class="chip amber">مفتوح وغير مكتمل</span>';
+}
+
+function renderLog(){
+  const now = Date.now(); sync(now);
+  const mode = $('logFilter').value; const tk = dayKey(new Date(now));
+  let keys = Object.keys(state.days).sort().reverse();
+  if (mode === 'today') keys = keys.filter(k => k === tk || k === activeKey);
+  else if (mode === 'week'){ const c = new Date(); c.setDate(c.getDate() - 6); const ck = dayKey(c); keys = keys.filter(k => k >= ck); }
+  const host = $('logBody');
+  if (!keys.length){
+    host.innerHTML = emptyState(mode === 'today' ? 'لا توجد حركة مسجلة اليوم' : 'لا توجد سجلات بعد', 'ابدأ يوم العمل ليظهر سجل الحركة هنا.');
+    return;
+  }
+  let rows = '';
+  keys.forEach(k => {
+    const day = state.days[k]; const c = computeDay(day, now);
+    rows += `<tr class="grp"><td colspan="8"><div class="grpin">
+      <strong>${fmtDateLong(day.start)}</strong>${statusChip(day, c)}
+      <span class="muted">الخروج: ${fmtDur(c.outMs)} — الزائد: ${fmtDur(c.excessMs)} — التأخير: ${fmtDur(c.lateMs)}</span>
+      <span class="sp"></span><button class="link danger" type="button" data-del="${k}">حذف اليوم</button></div></td></tr>`;
+    let cum = 0;
+    eventsOf(day).forEach(e => {
+      if (e.type === 'in') cum += e.dur;
+      const cumS = Math.floor(cum / 1000) * 1000;
+      const exc = Math.max(0, cumS - c.allowMs);
+      const expected = day.start + c.durMs + exc;
+      let dur = '—';
+      if (e.type === 'in') dur = fmtDur(e.dur);
+      else if (e.type === 'out' && e.open) dur = c.live ? '<span class="chip blue">جارية</span>' : '<span class="chip amber">غير مكتملة</span>';
+      const manual = e.manual ? ' <span class="muted">(يدوي)</span>' : '';
+      rows += `<tr>
+        <td>${fmtDMY(k)}</td>
+        <td><span class="ev ${e.type}">${EV_LABEL[e.type]}</span>${manual}</td>
+        <td>${fmtTime(e.ts, true)}</td>
+        <td>${dur}</td>
+        <td>${fmtDur(cumS)}</td>
+        <td style="color:${exc > 0 ? 'var(--red)' : 'inherit'}">${fmtDur(exc)}</td>
+        <td style="color:var(--cyan)">${fmtTime(expected, true)}</td>
+        <td>${e.type === 'end' ? fmtTime(e.ts, true) + (e.ts - expected <= -60000 ? ` <span class="chip amber">مبكر ${fmtLong(expected - e.ts)}</span>` : '') : '—'}</td>
+      </tr>`;
+    });
+  });
+  host.innerHTML = `<div class="tw"><table>
+    <thead><tr><th>التاريخ</th><th>الحدث</th><th>الوقت</th><th>مدة الخروج</th><th>إجمالي الخروج اليومي</th><th>الوقت الزائد</th><th>الانصراف المتوقع</th><th>الانصراف الفعلي</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+function emptyState(title, hint, cta){
+  return `<div class="empty"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="12" width="44" height="42" rx="6"/><path d="M10 24h44M22 8v8M42 8v8M22 36h8M34 36h8M22 45h8"/></svg>
+  <strong>${title}</strong><span>${hint}</span>${cta ? `<div><button class="btn sm" type="button" data-goto-top>الانتقال إلى لوحة التحكم</button></div>` : ''}</div>`;
+}
+
+function weekRange(off){
+  const t = new Date(); t.setHours(0,0,0,0);
+  const s = new Date(t); s.setDate(t.getDate() - ((t.getDay() + 6) % 7) + off * 7);
+  const e = new Date(s); e.setDate(s.getDate() + 6);
+  return { start:s, end:e };
+}
+function monthRange(off){
+  const t = new Date();
+  const s = new Date(t.getFullYear(), t.getMonth() + off, 1);
+  const e = new Date(s.getFullYear(), s.getMonth() + 1, 0);
+  return { start:s, end:e };
+}
+function periodData(view, off){
+  const now = Date.now(); sync(now);
+  const { start, end } = view === 'week' ? weekRange(off) : monthRange(off);
+  const rows = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)){
+    const k = dayKey(d); const day = state.days[k];
+    rows.push({ k, date:new Date(d), day, c: day ? computeDay(day, now) : null });
+  }
+  return { start, end, rows };
+}
+function periodLabel(view, start, end){
+  if (view === 'month'){
+    try { return start.toLocaleDateString('ar-EG-u-nu-latn', { month:'long', year:'numeric' }); }
+    catch(e){ return `${pad(start.getMonth()+1)}/${start.getFullYear()}`; }
+  }
+  return `${fmtMonthDay(start)} – ${fmtMonthDay(end)} ${end.getFullYear()}`;
+}
+function renderReports(animate){
+  const { start, end, rows } = periodData(repView, repOff[repView]);
+  setText('repLabel', periodLabel(repView, start, end));
+  $('repNext').disabled = repOff[repView] >= 0;
+  $('viewWeek').setAttribute('aria-pressed', repView === 'week');
+  $('viewMonth').setAttribute('aria-pressed', repView === 'month');
+  const rec = rows.filter(r => r.day);
+  const host = $('repBody');
+  if (!rec.length){
+    const isCur = repOff[repView] === 0;
+    host.innerHTML = emptyState('لا توجد سجلات في هذه الفترة', isCur ? 'ستظهر الإحصائيات هنا بعد أن تبدأ يوم العمل.' : 'جرّب فترة أخرى بالأسهم أعلاه.', isCur);
+    return;
+  }
+  const sum = f => rec.reduce((a, r) => a + f(r.c), 0);
+  const totOut = sum(c => c.outMs), totEx = sum(c => c.excessMs), totLate = sum(c => c.lateMs);
+  const avg = totOut / rec.length;
+  const earlyOf = c => c.diffMs != null && c.diffMs <= -60000 ? -c.diffMs : 0;
+  const totEarly = sum(earlyOf);
+  const tiles = `<div class="tiles">
+    <div class="tile"><div class="k">أيام العمل المسجلة</div><div class="v">${rec.length}</div></div>
+    <div class="tile"><div class="k">إجمالي الوقت خارج الشركة</div><div class="v">${fmtDur(totOut)}</div></div>
+    <div class="tile ${totEx > 0 ? 'bad' : 'good'}"><div class="k">إجمالي الوقت الزائد</div><div class="v">${fmtDur(totEx)}</div></div>
+    <div class="tile ${totLate > 0 ? 'warn' : 'good'}"><div class="k">إجمالي التأخير</div><div class="v">${fmtDur(totLate)}</div></div>
+    <div class="tile ${totEarly > 0 ? 'warn' : 'good'}"><div class="k">إجمالي الانصراف المبكر</div><div class="v">${fmtDur(totEarly)}</div></div>
+    <div class="tile"><div class="k">متوسط الخروج لكل يوم</div><div class="v">${fmtDur(avg)}</div></div>
+  </div>`;
+
+  // chart
+  const allow = state.settings.allowanceMin;
+  const maxMin = Math.max(allow * 1.3, ...rec.map(r => r.c.outMs / 60000));
+  const bars = rows.map(r => {
+    if (!r.c) return `<div class="bar none" title="${fmtDMY(r.k)}: لا سجل"></div>`;
+    const h = Math.max(2, r.c.outMs / 60000 / maxMin * 100);
+    return `<div class="bar ${r.c.level}" style="height:${h}%" title="${fmtDMY(r.k)}: ${fmtDur(r.c.outMs)}"></div>`;
+  }).join('');
+  const labs = rows.map(r => `<span>${repView === 'week' ? WEEKDAYS[r.date.getDay()] : r.date.getDate()}</span>`).join('');
+  const chart = `<div class="chartbox"><h3>الوقت خارج الشركة يوميًا (الخط المتقطع = الحد المسموح ${allow} د)</h3>
+    <div class="plot"><div class="ref" style="bottom:${allow / maxMin * 100}%"><span>${allow} د</span></div>
+    <div class="bars ${animate ? 'animate' : ''}" style="--n:${rows.length}">${bars}</div></div>
+    <div class="blabels" style="--n:${rows.length}">${labs}</div></div>`;
+
+  const body = rec.map(r => {
+    const c = r.c, d = r.day;
+    const flag = c.unknownOpen ? ' <span class="chip red">فترة مفتوحة</span>' : '';
+    return `<tr>
+      <td>${WEEKDAYS[r.date.getDay()]} ${fmtDMY(r.k)}</td>
+      <td>${fmtTime(d.start, true)}</td>
+      <td>${d.end ? fmtTime(d.end, true) : '—'}</td>
+      <td style="color:var(--cyan)">${fmtTime(c.adjLeave, true)}</td>
+      <td>${fmtDur(c.outMs)}</td>
+      <td style="color:${c.excessMs > 0 ? 'var(--red)' : 'inherit'}">${fmtDur(c.excessMs)}</td>
+      <td style="color:${c.lateMs > 0 ? 'var(--amber)' : 'inherit'}">${fmtDur(c.lateMs)}</td>
+      <td style="color:${earlyOf(c) > 0 ? 'var(--amber)' : 'inherit'}">${earlyOf(c) > 0 ? fmtDur(earlyOf(c)) : '—'}</td>
+      <td>${statusChip(d, c)}${flag}</td></tr>`;
+  }).join('');
+  const table = `<div class="tw"><table>
+    <thead><tr><th>اليوم</th><th>أول حضور</th><th>الانصراف الفعلي</th><th>الانصراف المتوقع</th><th>الوقت خارج الشركة</th><th>الوقت الزائد</th><th>التأخير</th><th>الانصراف المبكر</th><th>الحالة</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr><td colspan="4">الإجمالي (${rec.length} ${rec.length === 1 ? 'يوم' : 'أيام'})</td><td>${fmtDur(totOut)}</td><td>${fmtDur(totEx)}</td><td>${fmtDur(totLate)}</td><td>${fmtDur(totEarly)}</td><td></td></tr></tfoot></table></div>`;
+  host.innerHTML = tiles + chart + table;
+}
+
+/* =========================================================
+   Export / import
+   ========================================================= */
+function download(name, text, mime){
+  const blob = new Blob([text], { type:mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function csvFor(days, now){
+  const head = ['التاريخ','اليوم','بدء يوم العمل','الانصراف الفعلي','الانصراف المتوقع','الوقت خارج الشركة (دقيقة)','الوقت الزائد (دقيقة)','التأخير (دقيقة)','الانصراف المبكر (دقيقة)','عدد مرات الخروج','الحالة'];
+  const esc = v => { v = String(v ?? ''); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
+  const lines = [head.map(esc).join(',')];
+  days.forEach(day => {
+    const c = computeDay(day, now);
+    const stat = day.end ? 'مكتمل' : day.incomplete ? 'غير مكتمل' : c.live ? 'جارٍ' : 'مفتوح وغير مكتمل';
+    lines.push([day.key, WEEKDAYS[keyToDate(day.key).getDay()], fmt24(day.start), fmt24(day.end), fmt24(c.adjLeave),
+      mins2(c.outMs), mins2(c.excessMs), mins2(c.lateMs), c.diffMs != null && c.diffMs < 0 ? mins2(-c.diffMs) : '0.00', day.outs.length, stat].map(esc).join(','));
+  });
+  return '\uFEFF' + lines.join('\r\n');
+}
+function exportPeriod(){
+  const now = Date.now(); sync(now);
+  const { start, end, rows } = periodData(repView, repOff[repView]);
+  const days = rows.filter(r => r.day).map(r => r.day);
+  if (!days.length){ toast('لا توجد سجلات في هذه الفترة لتصديرها.', 'warn'); return; }
+  download(`gate-time-${repView === 'week' ? 'week' : 'month'}-${dayKey(start)}.csv`, csvFor(days, now), 'text/csv;charset=utf-8');
+  toast('تم تصدير التقرير.', 'ok');
+}
+function exportAll(){
+  const now = Date.now(); sync(now);
+  const days = Object.keys(state.days).sort().map(k => state.days[k]);
+  if (!days.length){ toast('لا توجد سجلات لتصديرها.', 'warn'); return; }
+  download(`gate-time-all-${dayKey()}.csv`, csvFor(days, now), 'text/csv;charset=utf-8');
+  toast('تم تصدير كل السجلات.', 'ok');
+}
+function exportJson(){
+  download(`gate-time-backup-${dayKey()}.json`, JSON.stringify(state, null, 2), 'application/json');
+  toast('تم تنزيل النسخة الاحتياطية.', 'ok');
+}
+async function importJson(file){
+  let parsed;
+  try { parsed = sanitize(JSON.parse(await file.text())); }
+  catch(e){ toast('الملف غير صالح كنسخة احتياطية.', 'danger'); return; }
+  const n = Object.keys(parsed.days).length;
+  const v = await ask({ title:'استعادة نسخة احتياطية؟', body:`يحتوي الملف على ${n} يوم عمل. سيتم استبدال كل السجلات والإعدادات الحالية بها.`, buttons:[{label:'استبدال واستعادة', value:'yes', cls:'danger'},{label:'إلغاء', value:'cancel', cls:'ghost'}] });
+  if (v !== 'yes') return;
+  state = parsed; save(); fillSettings(); renderAll(); toast('تمت استعادة البيانات.', 'ok');
+}
+async function wipeAll(){
+  const n = Object.keys(state.days).length;
+  if (!n){ toast('لا توجد سجلات لحذفها.', 'info'); return; }
+  const v = await ask({ title:'حذف كل السجلات؟', body:`سيتم حذف ${n} يوم عمل نهائيًا ولا يمكن التراجع. تبقى الإعدادات كما هي. يُنصح بتصدير نسخة احتياطية أولًا.`, buttons:[{label:'حذف نهائيًا', value:'yes', cls:'danger'},{label:'إلغاء', value:'cancel', cls:'ghost'}] });
+  if (v !== 'yes') return;
+  state.days = {}; save(); renderAll(); toast('تم حذف كل السجلات.', 'info');
+}
+
+/* =========================================================
+   Settings
+   ========================================================= */
+function fillSettings(){
+  const s = state.settings;
+  $('sStart').value = s.schedStart; $('sEnd').value = s.schedEnd;
+  $('sDur').value = s.durationH; $('sAllow').value = s.allowanceMin; $('sWarn').value = s.warnPct;
+  updateNotifState();
+}
+function setMsg(t, kind){ const m = $('setMsg'); m.textContent = t; m.className = `form-msg ${kind || ''}`; }
+function saveSettings(){
+  const t = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const ns = { schedStart:$('sStart').value, schedEnd:$('sEnd').value, durationH:parseFloat($('sDur').value), allowanceMin:parseFloat($('sAllow').value), warnPct:parseFloat($('sWarn').value) };
+  if (!t.test(ns.schedStart) || !t.test(ns.schedEnd)) return setMsg('أدخل وقتي بداية ونهاية صحيحين.', 'err');
+  if (!isNum(ns.durationH) || ns.durationH < .5 || ns.durationH > 24) return setMsg('مدة العمل يجب أن تكون بين 0.5 و24 ساعة.', 'err');
+  if (!isNum(ns.allowanceMin) || ns.allowanceMin < 1 || ns.allowanceMin > 480) return setMsg('الوقت المسموح يجب أن يكون بين 1 و480 دقيقة.', 'err');
+  if (!isNum(ns.warnPct) || ns.warnPct < 1 || ns.warnPct > 100) return setMsg('حد التنبيه يجب أن يكون بين 1% و100%.', 'err');
+  state.settings = ns;
+  const now = Date.now();
+  const today = state.days[dayKey(new Date(now))]; const act = sync(now);
+  [today, act].filter((d, i, a) => d && a.indexOf(d) === i).forEach(d => { d.cfg = { ...ns }; });
+  save(); renderAll(); setMsg('تم حفظ الإعدادات.', 'ok'); toast('تم حفظ الإعدادات.', 'ok');
+}
+function resetSettings(){ state.settings = { ...DEFAULTS }; fillSettings(); setMsg('تمت استعادة القيم الافتراضية. اضغط «حفظ الإعدادات» للتطبيق.', ''); }
+function updateNotifState(){
+  const el = $('notifState');
+  if (!('Notification' in window)){ el.textContent = 'المتصفح لا يدعم الإشعارات.'; $('btnNotif').disabled = true; return; }
+  const p = Notification.permission;
+  el.textContent = p === 'granted' ? 'الإشعارات مفعّلة.' : p === 'denied' ? 'الإشعارات محظورة من إعدادات المتصفح.' : '';
+  $('btnNotif').disabled = p !== 'default';
+}
+async function askNotif(){
+  try { await Notification.requestPermission(); } catch(e){}
+  updateNotifState();
+}
+
+/* =========================================================
+   Render orchestration & wiring
+   ========================================================= */
+function renderAll(animate){
+  const now = Date.now(); sync(now); lastKey = dayKey(new Date(now));
+  renderStoreWarn(); renderLive(now); renderStale(); renderLog();
+  if (!$('panel-reports').hidden) renderReports(animate);
+}
+function tick(){
+  const now = Date.now(); tickN++;
+  const k = dayKey(new Date(now));
+  if (k !== lastKey){ renderAll(); return; }
+  const c = renderLive(now);
+  checkAlerts(now);
+  if (c && c.status === 'outside' && tickN % 15 === 0){ renderLog(); if (!$('panel-reports').hidden) renderReports(false); }
+}
+function selectTab(name){
+  document.querySelectorAll('.tab').forEach(t => { const on = t.dataset.tab === name; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; });
+  document.querySelectorAll('.panel').forEach(p => { p.hidden = p.id !== `panel-${name}`; });
+  if (name === 'reports') renderReports(true);
+  if (name === 'log') renderLog();
+}
+
+function init(){
+  probeStorage(); load(); fillSettings();
+
+  $('btnStart').addEventListener('click', startWorkday);
+  $('btnOut').addEventListener('click', clockOut);
+  $('btnIn').addEventListener('click', clockIn);
+  $('btnEnd').addEventListener('click', endWorkday);
+  $('btnUndoEnd').addEventListener('click', undoEnd);
+
+  $('staleBox').addEventListener('click', e => { const b = e.target.closest('[data-close]'); if (b) closeStale(b.dataset.close); });
+  $('storeWarn').addEventListener('click', e => { if (e.target.closest('[data-dismiss-load]')){ loadNotice = ''; renderStoreWarn(); } });
+  $('logBody').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) deleteDay(b.dataset.del); });
+  $('repBody').addEventListener('click', e => { if (e.target.closest('[data-goto-top]')) window.scrollTo({ top:0, behavior:'smooth' }); });
+  $('logFilter').addEventListener('change', renderLog);
+
+  const tabs = [...document.querySelectorAll('.tab')];
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => selectTab(t.dataset.tab));
+    t.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const nx = tabs[(i + (e.key === 'ArrowLeft' ? 1 : -1) + tabs.length) % tabs.length];
+      nx.focus(); selectTab(nx.dataset.tab);
+    });
+  });
+
+  $('viewWeek').addEventListener('click', () => { repView = 'week'; renderReports(true); });
+  $('viewMonth').addEventListener('click', () => { repView = 'month'; renderReports(true); });
+  $('repPrev').addEventListener('click', () => { repOff[repView]--; renderReports(true); });
+  $('repNext').addEventListener('click', () => { if (repOff[repView] < 0){ repOff[repView]++; renderReports(true); } });
+  $('exportPeriod').addEventListener('click', exportPeriod);
+
+  $('saveSettings').addEventListener('click', saveSettings);
+  $('resetSettings').addEventListener('click', resetSettings);
+  $('btnNotif').addEventListener('click', askNotif);
+  $('exportAll').addEventListener('click', exportAll);
+  $('exportJson').addEventListener('click', exportJson);
+  $('importJson').addEventListener('click', () => $('importFile').click());
+  $('importFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importJson(f); });
+  $('wipeAll').addEventListener('click', wipeAll);
+
+  window.addEventListener('storage', e => { if (e.key === STORE_KEY){ load(); fillSettings(); renderAll(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+  window.addEventListener('focus', tick);
+
+  renderAll();
+  checkAlerts(Date.now());
+  setInterval(tick, 1000);
+}
+init();
+})();
+</script>
+</body>
+</html>
